@@ -1,0 +1,203 @@
+---
+title: "Statistical assignment 4"
+author: "Adam, 680019681"
+date: "26 February 2020"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+# Please note these options.
+# This tells R Markdown that we want to show code in the output document.
+knitr::opts_chunk$set(echo = TRUE)
+# Switching off messages in the output document. 
+knitr::opts_chunk$set(message = FALSE)
+knitr::opts_chunk$set(warning = FALSE)
+# Switching on caching to make things faster (don't commit cache files on Github).
+knitr::opts_chunk$set(cache = TRUE)
+```
+
+In this assignment you will need to reproduce 5 ggplot graphs. I supply graphs as images; you need to write the ggplot2 code to reproduce them and knit and submit a Markdown document with the reproduced graphs (as well as your .Rmd file).
+
+First we will need to open and recode the data. I supply the code for this; you only need to change the file paths.
+
+    ```{r}
+setwd("C:/Users/Adam/OneDrive/Documents/University Academic 2019-20/Classes Term 2/Data Analysis 3/assignment-4-ad700-bit")
+getwd()
+    
+library(tidyverse)
+Data8 <- read_tsv("h_indresp.tab")
+Data8 <- Data8 %>%
+        select(pidp, h_age_dv, h_payn_dv, h_gor_dv)
+Stable <- read_tsv("xwavedat.tab")
+Stable <- Stable %>%
+        select(pidp, sex_dv, ukborn, plbornc)
+Data <- Data8 %>% left_join(Stable, "pidp")
+rm(Data8, Stable)
+Data <- Data %>%
+        mutate(sex_dv = ifelse(sex_dv == 1, "male",
+                           ifelse(sex_dv == 2, "female", NA))) %>%
+        mutate(h_payn_dv = ifelse(h_payn_dv < 0, NA, h_payn_dv)) %>%
+        mutate(h_gor_dv = recode(h_gor_dv,
+                         `-9` = NA_character_,
+                         `1` = "North East",
+                         `2` = "North West",
+                         `3` = "Yorkshire",
+                         `4` = "East Midlands",
+                         `5` = "West Midlands",
+                         `6` = "East of England",
+                         `7` = "London",
+                         `8` = "South East",
+                         `9` = "South West",
+                         `10` = "Wales",
+                         `11` = "Scotland",
+                         `12` = "Northern Ireland")) %>%
+        mutate(placeBorn = case_when(
+                ukborn  == -9 ~ NA_character_,
+                ukborn < 5 ~ "UK",
+                plbornc == 5 ~ "Ireland",
+                plbornc == 18 ~ "India",
+                plbornc == 19 ~ "Pakistan",
+                plbornc == 20 ~ "Bangladesh",
+                plbornc == 10 ~ "Poland",
+                plbornc == 27 ~ "Jamaica",
+                plbornc == 24 ~ "Nigeria",
+                TRUE ~ "other")
+        )
+    ```
+
+Reproduce the following graphs as close as you can. For each graph, write two sentences (not more!) describing its main message.  
+
+1. Univariate distribution (20 points).
+
+    ```{r}
+summary(Data) #h_payn_dv = NA's: 22641
+
+table(is.na(Data))
+
+Data1 <- Data # Data1 = Original data with NA's still in 
+
+Data <- Data %>%
+  filter(!is.na(h_payn_dv))
+
+table(is.na(Data))
+
+original.parameters<- par( no.readonly = TRUE )
+
+ggplot(Data,
+       aes(x = h_payn_dv)) +
+  geom_line(stat = "density") +
+  xlim(-145,8500) +
+  xlab("Net monthly pay") +
+  ylab("Number of respondents")
+
+# From the univarite distribution of Net monthly pay it would appear the majority of the dataset has a net monthly pay
+# of betwen 100 to 2000 per month. There is a spike between 5000 and 6000, the reason for this is unknown.
+    ```
+
+2. Line chart (20 points). The lines show the non-parametric association between age and monthly earnings for men and women.
+
+    ```{r}
+    
+colnames(Data)
+names(Data)[names(Data) == "sex_dv"] <- "sex"    
+
+    
+byAgeSex <- Data %>%
+  filter(!is.na(sex)) %>%
+  group_by(h_age_dv, sex) %>%
+  summarise(
+    Net_Monthly_Pay = median(h_payn_dv))
+    
+  
+byAgeSex %>%
+  ggplot(aes(x = h_age_dv, y = Net_Monthly_Pay, group = sex)) +
+  geom_smooth(aes(linetype=sex)) +
+  scale_linetype_manual(values=c("solid", "twodash")) +
+  xlim(16,65) +
+  scale_y_continuous(breaks = seq(0, 2150, 500), limits = c(150, 2150)) +
+  xlab("Age") +
+  ylab("Montly earnings")
+  
+ 
+# From this graph it looks like men have a higher monthly earnings than women do. With men reaching their peak earnings
+# around 40 years of age and women reaching their peak earnings around the age of 30.
+    ```
+
+3. Faceted bar chart (20 points).
+
+    ```{r}
+byBirthSex <- Data %>%
+  filter(!is.na(sex)) %>%
+  group_by(placeBorn, sex) %>%
+  summarise(
+    Net_Monthly_Pay = median(h_payn_dv))
+    
+    
+byBirthSex <- na.omit(byBirthSex)
+
+byBirthSex %>%
+ggplot(aes(x = sex, y = Net_Monthly_Pay)) +
+  geom_bar(stat = "identity") +
+  xlab("Sex") +
+  ylab("Median monthly net pay") +
+  facet_wrap(~placeBorn, ncol = 3)
+    
+# From these charts, on average, Males from all diffrent place of origins earn more than women do in their respected origin of birth. With people born in Bangladesh having the lowest medium monthly net pay of under 1000 for both male and females. 
+    ```
+
+4. Heat map (20 points).
+
+    ```{r}
+table(is.na(Data$h_gor_dv))
+table(Data$h_gor_dv)
+summary(Data1$h_age_dv) 
+
+byRegion <- Data1 %>%
+  filter(!is.na(h_gor_dv)) %>%
+  filter(!is.na(placeBorn)) %>%
+  group_by(placeBorn, h_gor_dv) %>%
+  summarise(
+    MeanAge = mean(h_age_dv))    
+
+?geom_tile       
+    
+byRegion %>%
+  ggplot(aes(h_gor_dv, placeBorn, fill= MeanAge)) + 
+  geom_tile() +
+  xlab("Region") +
+  ylab("Country of birth") +
+  theme(axis.text.x = element_text(angle = 90)) +
+  theme(panel.border = element_blank(),
+  panel.grid.major = element_blank(),
+  panel.grid.minor = element_blank(),
+  panel.background = element_rect(fill = 'white'))
+  
+# This heat map shows Poland and Nigeria have some of the lowest mean age through out all regions, the lowest overal region being London. Jamaica seems to have the highest mean age, however this cannot be said with cerianty due to missing data. 
+    ```
+
+5. Population pyramid (20 points).
+
+    ```{r}
+
+Data$population <- 1/sqrt(Data$h_age_dv) * runif(200, 10000, 15000)
+    
+Data$population <- Data$population / sum(Data$population) * 100   
+
+head(dats)
+
+
+ggplot(Data, aes(x = h_age_dv, fill = sex,
+                 y = ifelse(test = sex == "male",
+                            yes = -population, no = population))) + 
+  geom_bar(stat = "identity")  +
+  coord_flip() +
+  labs(x = "Age", y = "n") +
+  xlim(16, 100)
+
+
+  scale_y_continuous(labels = abs, limits = max(Data$population * c(-200,200)))
+
+
+    
+?runif
+    ```
